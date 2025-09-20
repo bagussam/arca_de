@@ -5,6 +5,7 @@ streamlit
 langchain
 langgraph
 langchain-google-genai
+langchain-community
 
 # API Clients & Utilities
 google-generativeai
