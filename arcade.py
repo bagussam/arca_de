@@ -50,7 +50,7 @@ def web_search(query: str):
 def generate_image(prompt: str):
     """Gunakan tool ini untuk membuat atau menghasilkan gambar berdasarkan deskripsi teks."""
     try:
-        image_model = genai.GenerativeModel('gemini-1.5-pro')
+        image_model = genai.GenerativeModel('gemini-2.5-flash')
         response = image_model.generate_content([prompt], generation_config={"response_mime_type": "image/png"})
         
         image_data = response.parts[0].blob
@@ -99,7 +99,7 @@ def answer_from_document(query: str):
         
         Pertanyaan: {query}
         """
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt_template)
         return response.text
     except Exception as e:
@@ -109,7 +109,7 @@ def answer_from_document(query: str):
 def describe_image(file_path: str):
     """Gunakan tool ini untuk menganalisis dan mendeskripsikan isi dari sebuah gambar yang di-upload."""
     try:
-        model = genai.GenerativeModel('gemini-1.5-pro')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         image = Image.open(file_path)
         prompt = "Deskripsikan gambar ini secara detail."
         
@@ -121,7 +121,7 @@ def describe_image(file_path: str):
 # --- 3. Inisialisasi Agen LangGraph ---
 if "agent" not in st.session_state:
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         st.session_state.agent = create_react_agent(model=llm, tools=tools)
     except Exception as e:
