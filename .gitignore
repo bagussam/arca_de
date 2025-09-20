@@ -1,0 +1,7 @@
+# Miniconda & Python
+__pycache__/
+*.pyc
+
+# Environment
+venv/
+.env
