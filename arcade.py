@@ -176,7 +176,7 @@ for msg in st.session_state.messages:
             st.markdown(msg["content"])
 
 # --- 6. Logika Input dan Respons ---
-prompt = st.chat_input("Tanya saya, minta rangkuman PDF, atau minta saya membuat gambar...")
+prompt = st.chat_input("Tanya saya, apa saja...")
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
