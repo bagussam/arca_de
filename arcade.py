@@ -121,9 +121,23 @@ def describe_image(file_path: str):
 # --- 3. Inisialisasi Agen LangGraph ---
 if "agent" not in st.session_state:
     try:
+        # Inisialisasi LLM utama untuk percakapan
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
-        st.session_state.agent = create_react_agent(model=llm, tools=tools)
+        
+        # GANTI DENGAN KODE DI BAWAH INI
+        st.session_state.agent = create_react_agent(
+            model=llm,
+            tools=tools,
+            prompt="""You are a helpful assistant with powerful tools.
+
+            IMPORTANT:
+            - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
+            - For factual or recent questions, use the 'web_search' tool.
+            - For questions about a document, use the 'answer_from_document' tool after it has been processed.
+            - Otherwise, answer like a friendly chatbot.
+            """
+        )
     except Exception as e:
         st.error(f"Gagal menginisialisasi agen AI: {e}")
         st.stop()
