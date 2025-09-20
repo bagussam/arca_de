@@ -16,9 +16,9 @@ import os
 import tempfile
 
 # --- 1. Konfigurasi Halaman dan Judul ---
-st.set_page_config(page_title="Arcade", page_icon="🕹️", layout="wide")
-st.title("🕹️ Arcade")
-st.caption("AI Chatbot dengan kemampuan RAG, pencarian web, dan pembuatan gambar.")
+st.set_page_config(page_title="Arca-de", page_icon="🕹️", layout="wide")
+st.title("🕹️ Arca-de")
+st.caption("AI Chatbot dengan beragam kemampuan")
 
 # --- 2. Inisialisasi API Keys dan Tools ---
 
@@ -50,7 +50,8 @@ def web_search(query: str):
 def generate_image(prompt: str):
     """Gunakan tool ini untuk membuat atau menghasilkan gambar berdasarkan deskripsi teks."""
     try:
-        image_model = genai.GenerativeModel('gemini-2.5-flash')
+        # PENTING: Gunakan model 'pro' untuk membuat gambar
+        image_model = genai.GenerativeModel('gemini-1.5-pro')
         response = image_model.generate_content([prompt], generation_config={"response_mime_type": "image/png"})
         
         image_data = response.parts[0].blob
@@ -66,17 +67,11 @@ def generate_image(prompt: str):
 def process_document(file_path: str):
     """Gunakan tool ini untuk memproses dan mempelajari isi dokumen PDF yang di-upload pengguna."""
     try:
-        # Muat dokumen PDF
         loader = PyPDFLoader(file_path)
         documents = loader.load()
-        
-        # Bagi teks menjadi potongan-potongan kecil
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = text_splitter.split_documents(documents)
-        
-        # Buat dan simpan vector store di session state
         st.session_state.vector_store = Chroma.from_documents(documents=chunks, embedding=st.session_state.embeddings)
-        
         return f"Dokumen '{os.path.basename(file_path)}' berhasil diproses. Sekarang pengguna bisa bertanya tentang isinya."
     except Exception as e:
         return f"Gagal memproses dokumen: {e}"
@@ -88,18 +83,11 @@ def answer_from_document(query: str):
         return "Dokumen belum diproses. Harap proses dokumen terlebih dahulu menggunakan tool 'process_document'."
     
     try:
-        # Cari potongan teks yang relevan di vector store
         relevant_docs = st.session_state.vector_store.similarity_search(query)
         context = "\n".join([doc.page_content for doc in relevant_docs])
-        
-        # Buat prompt untuk LLM
-        prompt_template = f"""Berdasarkan konteks berikut, jawab pertanyaan pengguna.
-        Konteks:
-        {context}
-        
-        Pertanyaan: {query}
-        """
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        prompt_template = f"Berdasarkan konteks berikut, jawab pertanyaan pengguna.\nKonteks:\n{context}\n\nPertanyaan: {query}"
+        # PENTING: Gunakan model 'flash' atau 'pro' yang benar
+        model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt_template)
         return response.text
     except Exception as e:
@@ -109,10 +97,10 @@ def answer_from_document(query: str):
 def describe_image(file_path: str):
     """Gunakan tool ini untuk menganalisis dan mendeskripsikan isi dari sebuah gambar yang di-upload."""
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # PENTING: Gunakan model 'pro' yang mampu memproses gambar
+        model = genai.GenerativeModel('gemini-1.5-pro')
         image = Image.open(file_path)
         prompt = "Deskripsikan gambar ini secara detail."
-        
         response = model.generate_content([prompt, image])
         return response.text
     except Exception as e:
@@ -121,11 +109,10 @@ def describe_image(file_path: str):
 # --- 3. Inisialisasi Agen LangGraph ---
 if "agent" not in st.session_state:
     try:
-        # Inisialisasi LLM utama untuk percakapan
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+        # PENTING: Gunakan model 'flash' yang benar untuk otak agen
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
-        # GANTI DENGAN KODE DI BAWAH INI
         st.session_state.agent = create_react_agent(
             model=llm,
             tools=tools,
@@ -135,6 +122,7 @@ if "agent" not in st.session_state:
             - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
             - For factual or recent questions, use the 'web_search' tool.
             - For questions about a document, use the 'answer_from_document' tool after it has been processed.
+            - To describe a user-uploaded image, use the 'describe_image' tool.
             - Otherwise, answer like a friendly chatbot.
             """
         )
@@ -152,25 +140,24 @@ with st.sidebar:
 
     uploaded_file = st.file_uploader("Upload PDF atau Gambar", type=["pdf", "png", "jpg", "jpeg"])
     
-    # Proses file yang di-upload secara otomatis
     if uploaded_file and ("processed_file" not in st.session_state or st.session_state.processed_file != uploaded_file.name):
         with st.spinner(f"Memproses file {uploaded_file.name}..."):
-            # Simpan file ke direktori sementara
             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
                 file_path = tmp_file.name
 
-            # Tentukan tool yang akan digunakan berdasarkan tipe file
             if uploaded_file.type == "application/pdf":
                 tool_to_use = "process_document"
-                tool_input = {"file_path": file_path}
-            else: # Gambar
+            else:
                 tool_to_use = "describe_image"
-                tool_input = {"file_path": file_path}
-
-            # Panggil agen untuk memproses file
-            tool_message = ToolMessage(content=f"Pengguna telah mengupload file: {uploaded_file.name}. Gunakan tool '{tool_to_use}' untuk memprosesnya.", tool_call_id="upload_trigger")
-            response = st.session_state.agent.invoke({"messages": [tool_message, HumanMessage(content=f"Proses file ini: {file_path}")]})
+            
+            # Buat pesan untuk memicu agen memproses file
+            process_prompt = f"Pengguna telah mengupload file bernama '{uploaded_file.name}'. Gunakan tool '{tool_to_use}' untuk memproses file yang ada di path: {file_path}"
+            st.session_state.messages.append({"role": "user", "content": process_prompt})
+            
+            # Panggil agen untuk mendapatkan konfirmasi
+            history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
+            response = st.session_state.agent.invoke({"messages": history})
             result_message = response['messages'][-1].content
             
             st.session_state.messages.append({"role": "assistant", "content": result_message})
