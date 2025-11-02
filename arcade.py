@@ -15,6 +15,7 @@ from PIL import Image
 import io
 import os
 import tempfile
+import textwrap # <- TAMBAHAN BARU UNTUK MEMBERSIHKAN PROMPT
 
 # --- 1. Konfigurasi Halaman dan Judul ---
 st.set_page_config(page_title="Arca-de", page_icon="🕹️", layout="wide")
@@ -107,29 +108,28 @@ def describe_image(file_path: str):
     except Exception as e:
         return f"Gagal mendeskripsikan gambar: {e}"
 
-# --- 3. Inisialisasi Agen LangGraph (BAGIAN YANG DIPERBAIKI) ---
+# --- 3. Inisialisasi Agen LangGraph (PERBAIKAN INDENTASI PROMPT) ---
 if "agent" not in st.session_state:
     try:
-        # Baris-baris ini semua memiliki indentasi (8 spasi) yang sama
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
-        # 1. Pisahkan teks prompt Anda ke dalam variabel sendiri
-        system_prompt_text = """You are a helpful assistant with powerful tools.
+        # 1. Gunakan textwrap.dedent untuk membersihkan spasi ekstra
+        system_prompt_text = textwrap.dedent("""
+            You are a helpful assistant with powerful tools.
 
-        IMPORTANT:
-        - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
-        - For factual or recent questions, use the 'web_search' tool.
-        - For questions about a document, use the 'answer_from_document' tool after it has been processed.
-        - To describe a user-uploaded image, use the 'describe_image' tool.
-        - Otherwise, answer like a friendly chatbot.
-        """
+            IMPORTANT:
+            - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
+            - For factual or recent questions, use the 'web_search' tool.
+            - For questions about a document, use the 'answer_from_document' tool after it has been processed.
+            - To describe a user-uploaded image, use the 'describe_image' tool.
+            - Otherwise, answer like a friendly chatbot.
+        """)
         
         # 2. Panggil 'create_react_agent' dengan argumen yang benar
         st.session_state.agent = create_react_agent(
             model=llm,
             tools=tools,
-            # Ini adalah argumen yang benar:
             messages_modifier=SystemMessage(content=system_prompt_text)
         )
     
@@ -217,3 +217,4 @@ if prompt:
                 error_message = f"Terjadi kesalahan: {e}"
                 st.error(error_message)
                 st.session_state.messages.append({"role": "assistant", "content": error_message, "type": "text"})
+
