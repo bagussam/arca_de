@@ -117,7 +117,7 @@ if "agent" not in st.session_state:
         st.session_state.agent = create_react_agent(
             model=llm,
             tools=tools,
-            prompt="""You are a helpful assistant with powerful tools.
+            system_message="""You are a helpful assistant with powerful tools.
 
             IMPORTANT:
             - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
