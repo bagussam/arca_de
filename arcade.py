@@ -83,7 +83,8 @@ def generate_image(prompt: str):
         if not response.parts:
             return "Gagal menghasilkan gambar: Tidak ada data gambar yang diterima dari API."
             
-        image_data = response.parts[0].inline_data.data
+        # PERBAIKAN 1: Menggunakan .blob, bukan .inline_data.data
+        image_data = response.parts[0].blob
         image = Image.open(io.BytesIO(image_data))
         
         # Simpan gambar sementara
@@ -197,7 +198,8 @@ with st.sidebar:
     if uploaded_file and ("processed_file" not in st.session_state or st.session_state.processed_file != uploaded_file.name):
         with st.spinner(f"Memproses file {uploaded_file.name}..."):
             try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1J]) as tmp_file:
+                # PERBAIKAN 2: Menghapus typo 'J'
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
                     file_path = tmp_file.name
 
@@ -219,9 +221,9 @@ with st.sidebar:
                 history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
                 
                 if "agent" not in st.session_state:
-                     st.error("Agen AI belum siap. Silakan refresh halaman.")
-                     st.stop()
-                     
+                        st.error("Agen AI belum siap. Silakan refresh halaman.")
+                        st.stop()
+                        
                 response = st.session_state.agent.invoke({"messages": history})
                 
                 # Pastikan response adalah AIMessage
@@ -271,9 +273,9 @@ if prompt:
                 history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
                 
                 if "agent" not in st.session_state:
-                     st.error("Agen AI belum siap. Silakan refresh halaman.")
-                     st.stop()
-                     
+                        st.error("Agen AI belum siap. Silakan refresh halaman.")
+                        st.stop()
+                        
                 response = st.session_state.agent.invoke({"messages": history})
                 
                 if isinstance(response.get('messages', [])[-1], AIMessage):

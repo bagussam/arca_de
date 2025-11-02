@@ -1,15 +1,15 @@
-Core Framework
+#Core Framework
 
 streamlit
 
-LangChain & LangGraph Ecosystem
+#LangChain & LangGraph Ecosystem
 
 langchain
 langgraph
 langchain-google-genai==1.0.1
 langchain-community
 
-API Clients & Utilities
+#API Clients & Utilities
 
 google-generativeai
 exa_py
@@ -17,12 +17,12 @@ pypdf
 pillow
 chromadb
 
-Data Handling (jika diperlukan, biasanya sudah terinstal sebagai dependensi)
+#Data Handling (jika diperlukan, biasanya sudah terinstal sebagai dependensi)
 
 pandas
 
 numpy
 
-PERBAIKAN: Paksa update google-generativeai
+#PERBAIKAN: Paksa update google-generativeai
 
 google-generativeai>=0.5.0
