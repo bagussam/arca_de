@@ -107,32 +107,32 @@ def describe_image(file_path: str):
     except Exception as e:
         return f"Gagal mendeskripsikan gambar: {e}"
 
-# --- 3. Inisialisasi Agen LangGraph ---
+# --- 3. Inisialisasi Agen LangGraph (BAGIAN YANG DIPERBAIKI) ---
 if "agent" not in st.session_state:
     try:
-        # PENTING: Gunakan model 'flash' yang benar untuk otak agen
+        # Baris-baris ini semua memiliki indentasi (8 spasi) yang sama
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
         # 1. Pisahkan teks prompt Anda ke dalam variabel sendiri
-            system_prompt_text = """You are a helpful assistant with powerful tools.
+        system_prompt_text = """You are a helpful assistant with powerful tools.
 
-            IMPORTANT:
-            - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
-            - For factual or recent questions, use the 'web_search' tool.
-            - For questions about a document, use the 'answer_from_document' tool after it has been processed.
-            - To describe a user-uploaded image, use the 'describe_image' tool.
-            - Otherwise, answer like a friendly chatbot.
-            """
-
+        IMPORTANT:
+        - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
+        - For factual or recent questions, use the 'web_search' tool.
+        - For questions about a document, use the 'answer_from_document' tool after it has been processed.
+        - To describe a user-uploaded image, use the 'describe_image' tool.
+        - Otherwise, answer like a friendly chatbot.
+        """
+        
         # 2. Panggil 'create_react_agent' dengan argumen yang benar
-            st.session_state.agent = create_react_agent(
-             model=llm,
-             tools=tools,
+        st.session_state.agent = create_react_agent(
+            model=llm,
+            tools=tools,
             # Ini adalah argumen yang benar:
-             messages_modifier=SystemMessage(content=system_prompt_text)
+            messages_modifier=SystemMessage(content=system_prompt_text)
         )
-
+    
     except Exception as e:
         st.error(f"Gagal menginisialisasi agen AI: {e}")
         st.stop()
@@ -160,6 +160,11 @@ with st.sidebar:
             
             # Buat pesan untuk memicu agen memproses file
             process_prompt = f"Pengguna telah mengupload file bernama '{uploaded_file.name}'. Gunakan tool '{tool_to_use}' untuk memproses file yang ada di path: {file_path}"
+            
+            # Pastikan st.session_state.messages ada sebelum di-append
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
+                
             st.session_state.messages.append({"role": "user", "content": process_prompt})
             
             # Panggil agen untuk mendapatkan konfirmasi
@@ -198,9 +203,13 @@ if prompt:
 
                 if "Gambar berhasil dibuat" in answer:
                     image_path = "temp_generated_image.png"
-                    st.image(image_path, caption="Gambar yang dihasilkan AI")
-                    st.session_state.messages.append({"role": "assistant", "content": image_path, "type": "image"})
-                    if os.path.exists(image_path): os.remove(image_path)
+                    if os.path.exists(image_path):
+                        st.image(image_path, caption="Gambar yang dihasilkan AI")
+                        st.session_state.messages.append({"role": "assistant", "content": image_path, "type": "image"})
+                        os.remove(image_path)
+                    else:
+                        st.error("Gagal menemukan gambar yang telah dibuat.")
+                        st.session_state.messages.append({"role": "assistant", "content": "Maaf, terjadi kesalahan saat mencoba menampilkan gambar.", "type": "text"})
                 else:
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer, "type": "text"})
