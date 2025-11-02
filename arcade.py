@@ -3,7 +3,7 @@
 import streamlit as st
 import google.generativeai as genai
 from exa_py import Exa
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -114,10 +114,8 @@ if "agent" not in st.session_state:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
-        st.session_state.agent = create_react_agent(
-            model=llm,
-            tools=tools,
-            system_message="""You are a helpful assistant with powerful tools.
+        # 1. Pisahkan teks prompt Anda ke dalam variabel sendiri
+            system_prompt_text = """You are a helpful assistant with powerful tools.
 
             IMPORTANT:
             - If the user asks to 'generate', 'create', 'draw', or 'make an image of' something, you MUST use the 'generate_image' tool.
@@ -126,7 +124,15 @@ if "agent" not in st.session_state:
             - To describe a user-uploaded image, use the 'describe_image' tool.
             - Otherwise, answer like a friendly chatbot.
             """
+
+        # 2. Panggil 'create_react_agent' dengan argumen yang benar
+            st.session_state.agent = create_react_agent(
+             model=llm,
+             tools=tools,
+            # Ini adalah argumen yang benar:
+             messages_modifier=SystemMessage(content=system_prompt_text)
         )
+
     except Exception as e:
         st.error(f"Gagal menginisialisasi agen AI: {e}")
         st.stop()
