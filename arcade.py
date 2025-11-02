@@ -16,7 +16,6 @@ import io
 import os
 import tempfile
 import textwrap # <- TAMBAHAN BARU UNTUK MEMBERSIHKAN PROMPT
-import traceback # <- TAMBAHAN BARU UNTUK MELIHAT ERROR LENGKAP
 
 # --- 1. Konfigurasi Halaman dan Judul ---
 st.set_page_config(page_title="Arca-de", page_icon="🕹️", layout="wide")
@@ -109,7 +108,7 @@ def describe_image(file_path: str):
     except Exception as e:
         return f"Gagal mendeskripsikan gambar: {e}"
 
-# --- 3. Inisialisasi Agen LangGraph (PERBAIKAN ERROR HANDLING) ---
+# --- 3. Inisialisasi Agen LangGraph (PERBAIKAN INDENTASI PROMPT) ---
 if "agent" not in st.session_state:
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
@@ -134,119 +133,88 @@ if "agent" not in st.session_state:
             messages_modifier=SystemMessage(content=system_prompt_text)
         )
     
-    # BLOK INI TELAH DIUBAH UNTUK MENAMPILKAN ERROR LENGKAP
     except Exception as e:
-        st.error(f"Gagal menginisialisasi agen AI (lihat detail di bawah):")
-        st.exception(e) # st.exception akan menampilkan traceback lengkap
+        st.error(f"Gagal menginisialisasi agen AI: {e}")
         st.stop()
 
 # --- 4. Sidebar dengan File Uploader ---
 with st.sidebar:
-# ... sisa kode tetap sama ...
-# ... existing code ...
     st.header("Pengaturan")
     if st.button("Reset Percakapan"):
-# ... existing code ...
         st.session_state.messages = []
         if os.path.exists("temp_generated_image.png"): os.remove("temp_generated_image.png")
-# ... existing code ...
         st.rerun()
 
     uploaded_file = st.file_uploader("Upload PDF atau Gambar", type=["pdf", "png", "jpg", "jpeg"])
-# ... existing code ...
     
     if uploaded_file and ("processed_file" not in st.session_state or st.session_state.processed_file != uploaded_file.name):
         with st.spinner(f"Memproses file {uploaded_file.name}..."):
-# ... existing code ...
             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
-# ... existing code ...
                 file_path = tmp_file.name
 
             if uploaded_file.type == "application/pdf":
-# ... existing code ...
                 tool_to_use = "process_document"
             else:
                 tool_to_use = "describe_image"
-# ... existing code ...
             
             # Buat pesan untuk memicu agen memproses file
             process_prompt = f"Pengguna telah mengupload file bernama '{uploaded_file.name}'. Gunakan tool '{tool_to_use}' untuk memproses file yang ada di path: {file_path}"
-# ... existing code ...
             
             # Pastikan st.session_state.messages ada sebelum di-append
             if "messages" not in st.session_state:
-# ... existing code ...
                 st.session_state.messages = []
                 
             st.session_state.messages.append({"role": "user", "content": process_prompt})
-# ... existing code ...
             
             # Panggil agen untuk mendapatkan konfirmasi
             history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
-# ... existing code ...
             response = st.session_state.agent.invoke({"messages": history})
             result_message = response['messages'][-1].content
-# ... existing code ...
             
             st.session_state.messages.append({"role": "assistant", "content": result_message})
             st.session_state.processed_file = uploaded_file.name
-# ... existing code ...
             st.rerun()
 
 # --- 5. Manajemen dan Tampilan Chat ---
-# ... existing code ...
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 for msg in st.session_state.messages:
-# ... existing code ...
     with st.chat_message(msg["role"]):
         if msg.get("type") == "image":
-# ... existing code ...
             st.image(msg["content"], caption="Gambar yang dihasilkan AI")
         else:
             st.markdown(msg["content"])
-# ... existing code ...
 
 # --- 6. Logika Input dan Respons ---
 prompt = st.chat_input("Tanya saya, apa saja...")
-# ... existing code ...
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
-# ... existing code ...
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-# ... existing code ...
         with st.spinner("Sedang berpikir..."):
             try:
-# ... existing code ...
                 history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
                 response = st.session_state.agent.invoke({"messages": history})
-# ... existing code ...
                 answer = response['messages'][-1].content
 
                 if "Gambar berhasil dibuat" in answer:
-# ... existing code ...
                     image_path = "temp_generated_image.png"
                     if os.path.exists(image_path):
                         st.image(image_path, caption="Gambar yang dihasilkan AI")
-# ... existing code ...
                         st.session_state.messages.append({"role": "assistant", "content": image_path, "type": "image"})
                         os.remove(image_path)
-# ... existing code ...
                     else:
                         st.error("Gagal menemukan gambar yang telah dibuat.")
-# ... existing code ...
                         st.session_state.messages.append({"role": "assistant", "content": "Maaf, terjadi kesalahan saat mencoba menampilkan gambar.", "type": "text"})
                 else:
                     st.markdown(answer)
-# ... existing code ...
                     st.session_state.messages.append({"role": "assistant", "content": answer, "type": "text"})
             except Exception as e:
-# ... existing code ...
                 error_message = f"Terjadi kesalahan: {e}"
                 st.error(error_message)
-                st.session_state.messages.
+                st.session_state.messages.append({"role": "assistant", "content": error_message, "type": "text"})
+
