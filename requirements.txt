@@ -5,7 +5,7 @@ streamlit
 #LangChain & LangGraph Ecosystem
 
 langchain
-langgraph==0.0.45
+langgraph==0.0.46
 langchain-google-genai==1.0.1
 langchain-community
 
