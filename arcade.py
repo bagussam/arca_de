@@ -15,7 +15,8 @@ from PIL import Image
 import io
 import os
 import tempfile
-import textwrap # <- TAMBAHAN BARU UNTUK MEMBERSIHKAN PROMPT
+import textwrap # <- Untuk membersihkan indentasi prompt
+import traceback # <- PERUBAHAN NO 1 DIMULAI DARI SINI
 
 # --- 1. Konfigurasi Halaman dan Judul ---
 st.set_page_config(page_title="Arca-de", page_icon="🕹️", layout="wide")
@@ -29,7 +30,7 @@ try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     EXA_API_KEY = st.secrets["EXA_API_KEY"]
     
-    # PERBAIKAN: Pastikan keys tidak hanya ada, tapi juga tidak kosong
+    # Validasi keys (memastikan tidak hanya ada, tapi juga tidak kosong)
     if not GOOGLE_API_KEY:
         st.error("GOOGLE_API_KEY di Streamlit Secrets ditemukan, tetapi nilainya kosong. Harap isi nilainya.")
         st.stop()
@@ -50,13 +51,16 @@ except Exception as e:
 
 # Inisialisasi model Embeddings sekali per sesi
 if "embeddings" not in st.session_state:
-    # PERBAIKAN: Teruskan juga API key ke model embeddings
-    st.session_state.embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=GOOGLE_API_KEY
-    )
+    try:
+        st.session_state.embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001",
+            google_api_key=GOOGLE_API_KEY
+        )
+    except Exception as e:
+        st.error(f"Gagal menginisialisasi model embeddings: {e}")
+        st.stop()
 
-# Fungsi Tools untuk Agen
+# --- Fungsi Tools untuk Agen ---
 @tool
 def web_search(query: str):
     """Gunakan tool ini untuk mencari informasi terbaru atau faktual di internet."""
@@ -75,9 +79,14 @@ def generate_image(prompt: str):
         image_model = genai.GenerativeModel('gemini-1.5-pro')
         response = image_model.generate_content([prompt], generation_config={"response_mime_type": "image/png"})
         
-        image_data = response.parts[0].blob
+        # Ekstrak data gambar
+        if not response.parts:
+            return "Gagal menghasilkan gambar: Tidak ada data gambar yang diterima dari API."
+            
+        image_data = response.parts[0].inline_data.data
         image = Image.open(io.BytesIO(image_data))
         
+        # Simpan gambar sementara
         temp_image_path = "temp_generated_image.png"
         image.save(temp_image_path)
         return f"Gambar berhasil dibuat dan disimpan sebagai {temp_image_path}. Tampilkan gambar ini dan berikan deskripsi singkat."
@@ -92,6 +101,10 @@ def process_document(file_path: str):
         documents = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = text_splitter.split_documents(documents)
+        
+        if "embeddings" not in st.session_state:
+             return "Error: Model Embeddings belum siap."
+             
         st.session_state.vector_store = Chroma.from_documents(documents=chunks, embedding=st.session_state.embeddings)
         return f"Dokumen '{os.path.basename(file_path)}' berhasil diproses. Sekarang pengguna bisa bertanya tentang isinya."
     except Exception as e:
@@ -107,7 +120,7 @@ def answer_from_document(query: str):
         relevant_docs = st.session_state.vector_store.similarity_search(query)
         context = "\n".join([doc.page_content for doc in relevant_docs])
         prompt_template = f"Berdasarkan konteks berikut, jawab pertanyaan pengguna.\nKonteks:\n{context}\n\nPertanyaan: {query}"
-        # PENTING: Gunakan model 'flash' atau 'pro' yang benar
+        
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt_template)
         return response.text
@@ -118,7 +131,6 @@ def answer_from_document(query: str):
 def describe_image(file_path: str):
     """Gunakan tool ini untuk menganalisis dan mendeskripsikan isi dari sebuah gambar yang di-upload."""
     try:
-        # PENTING: Gunakan model 'pro' yang mampu memproses gambar
         model = genai.GenerativeModel('gemini-1.5-pro')
         image = Image.open(file_path)
         prompt = "Deskripsikan gambar ini secara detail."
@@ -127,18 +139,17 @@ def describe_image(file_path: str):
     except Exception as e:
         return f"Gagal mendeskripsikan gambar: {e}"
 
-# --- 3. Inisialisasi Agen LangGraph (PERBAIKAN INDENTASI PROMPT) ---
+# --- 3. Inisialisasi Agen LangGraph ---
 if "agent" not in st.session_state:
     try:
-        # PERBAIKAN: Teruskan GOOGLE_API_KEY secara eksplisit ke ChatGoogleGenerativeAI
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
             temperature=0.7, 
-            google_api_key=GOOGLE_API_KEY # <-- Gunakan variabel yang sudah divalidasi
+            google_api_key=GOOGLE_API_KEY
         )
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
-        # 1. Gunakan textwrap.dedent untuk membersihkan spasi ekstra
+        # Membersihkan indentasi pada system prompt
         system_prompt_text = textwrap.dedent("""
             You are a helpful assistant with powerful tools.
 
@@ -148,9 +159,8 @@ if "agent" not in st.session_state:
             - For questions about a document, use the 'answer_from_document' tool after it has been processed.
             - To describe a user-uploaded image, use the 'describe_image' tool.
             - Otherwise, answer like a friendly chatbot.
-        """)
+            """)
         
-        # 2. Panggil 'create_react_agent' dengan argumen yang benar
         st.session_state.agent = create_react_agent(
             model=llm,
             tools=tools,
@@ -158,47 +168,84 @@ if "agent" not in st.session_state:
         )
     
     except Exception as e:
-        st.error(f"Gagal menginisialisasi agen AI: {e}")
+        # PERUBAHAN NO 1 ADA DI SINI:
+        # Kita tambahkan traceback untuk melihat error lengkapnya
+        tb_str = traceback.format_exc()
+        st.error(f"Gagal menginisialisasi agen AI: {e}\n\nTraceback lengkap:\n{tb_str}")
         st.stop()
+
 
 # --- 4. Sidebar dengan File Uploader ---
 with st.sidebar:
     st.header("Pengaturan")
     if st.button("Reset Percakapan"):
         st.session_state.messages = []
-        if os.path.exists("temp_generated_image.png"): os.remove("temp_generated_image.png")
+        if os.path.exists("temp_generated_image.png"): 
+            try:
+                os.remove("temp_generated_image.png")
+            except:
+                pass # Abaikan jika file tidak bisa dihapus
+        # Hapus juga vector store jika ada
+        if "vector_store" in st.session_state:
+            del st.session_state.vector_store
+        if "processed_file" in st.session_state:
+            del st.session_state.processed_file
         st.rerun()
 
     uploaded_file = st.file_uploader("Upload PDF atau Gambar", type=["pdf", "png", "jpg", "jpeg"])
     
     if uploaded_file and ("processed_file" not in st.session_state or st.session_state.processed_file != uploaded_file.name):
         with st.spinner(f"Memproses file {uploaded_file.name}..."):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
-                tmp_file.write(uploaded_file.getvalue())
-                file_path = tmp_file.name
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1J]) as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    file_path = tmp_file.name
 
-            if uploaded_file.type == "application/pdf":
-                tool_to_use = "process_document"
-            else:
-                tool_to_use = "describe_image"
-            
-            # Buat pesan untuk memicu agen memproses file
-            process_prompt = f"Pengguna telah mengupload file bernama '{uploaded_file.name}'. Gunakan tool '{tool_to_use}' untuk memproses file yang ada di path: {file_path}"
-            
-            # Pastikan st.session_state.messages ada sebelum di-append
-            if "messages" not in st.session_state:
-                st.session_state.messages = []
+                if uploaded_file.type == "application/pdf":
+                    tool_to_use = "process_document"
+                else:
+                    tool_to_use = "describe_image"
                 
-            st.session_state.messages.append({"role": "user", "content": process_prompt})
+                # Buat pesan untuk memicu agen memproses file
+                process_prompt = f"Pengguna telah mengupload file bernama '{uploaded_file.name}'. Gunakan tool '{tool_to_use}' untuk memproses file yang ada di path: {file_path}"
+                
+                # Inisialisasi messages jika belum ada
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+                    
+                st.session_state.messages.append({"role": "user", "content": process_prompt})
+                
+                # Panggil agen untuk mendapatkan konfirmasi
+                history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
+                
+                if "agent" not in st.session_state:
+                     st.error("Agen AI belum siap. Silakan refresh halaman.")
+                     st.stop()
+                     
+                response = st.session_state.agent.invoke({"messages": history})
+                
+                # Pastikan response adalah AIMessage
+                if isinstance(response.get('messages', [])[-1], AIMessage):
+                    result_message = response['messages'][-1].content
+                else:
+                    result_message = str(response) # Fallback
+                
+                st.session_state.messages.append({"role": "assistant", "content": result_message})
+                st.session_state.processed_file = uploaded_file.name
+                
+                # Hapus file temp setelah diproses
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    
+                st.rerun()
             
-            # Panggil agen untuk mendapatkan konfirmasi
-            history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
-            response = st.session_state.agent.invoke({"messages": history})
-            result_message = response['messages'][-1].content
-            
-            st.session_state.messages.append({"role": "assistant", "content": result_message})
-            st.session_state.processed_file = uploaded_file.name
-            st.rerun()
+            except Exception as e:
+                tb_str = traceback.format_exc()
+                st.error(f"Gagal memproses file upload: {e}\n\nTraceback:\n{tb_str}")
+                # Hapus file temp jika terjadi error
+                if 'file_path' in locals() and os.path.exists(file_path):
+                    os.remove(file_path)
+
 
 # --- 5. Manajemen dan Tampilan Chat ---
 if "messages" not in st.session_state:
@@ -222,24 +269,36 @@ if prompt:
         with st.spinner("Sedang berpikir..."):
             try:
                 history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
+                
+                if "agent" not in st.session_state:
+                     st.error("Agen AI belum siap. Silakan refresh halaman.")
+                     st.stop()
+                     
                 response = st.session_state.agent.invoke({"messages": history})
-                answer = response['messages'][-1].content
+                
+                if isinstance(response.get('messages', [])[-1], AIMessage):
+                    answer = response['messages'][-1].content
+                else:
+                    answer = str(response) # Fallback
 
                 if "Gambar berhasil dibuat" in answer:
                     image_path = "temp_generated_image.png"
                     if os.path.exists(image_path):
                         st.image(image_path, caption="Gambar yang dihasilkan AI")
                         st.session_state.messages.append({"role": "assistant", "content": image_path, "type": "image"})
-                        os.remove(image_path)
+                        st.session_state.messages.append({"role": "assistant", "content": "Berikut adalah gambarnya.", "type": "text"})
+                        os.remove(image_path) # Hapus setelah ditampilkan
                     else:
-                        st.error("Gagal menemukan gambar yang telah dibuat.")
-                        st.session_state.messages.append({"role": "assistant", "content": "Maaf, terjadi kesalahan saat mencoba menampilkan gambar.", "type": "text"})
+                        st.error("Gambar seharusnya dibuat, tapi file sementara tidak ditemukan.")
+                        st.session_state.messages.append({"role": "assistant", "content": "Maaf, terjadi kesalahan saat menampilkan gambar.", "type": "text"})
                 else:
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer, "type": "text"})
+            
             except Exception as e:
-                error_message = f"Terjadi kesalahan: {e}"
+                tb_str = traceback.format_exc()
+                error_message = f"Terjadi kesalahan: {e}\n\nTraceback:\n{tb_str}"
                 st.error(error_message)
+                # Ini adalah baris 252 yang telah diperbaiki:
                 st.session_state.messages.append({"role": "assistant", "content": error_message, "type": "text"})
-
 
