@@ -111,7 +111,12 @@ def describe_image(file_path: str):
 # --- 3. Inisialisasi Agen LangGraph (PERBAIKAN INDENTASI PROMPT) ---
 if "agent" not in st.session_state:
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+        # PERBAIKAN: Teruskan GOOGLE_API_KEY secara eksplisit ke ChatGoogleGenerativeAI
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash", 
+            temperature=0.7, 
+            google_api_key=st.secrets["GOOGLE_API_KEY"] # <-- TAMBAHAN EKSPLISIT
+        )
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
         # 1. Gunakan textwrap.dedent untuk membersihkan spasi ekstra
