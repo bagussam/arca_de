@@ -28,14 +28,33 @@ st.caption("AI Chatbot dengan beragam kemampuan")
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     EXA_API_KEY = st.secrets["EXA_API_KEY"]
+    
+    # PERBAIKAN: Pastikan keys tidak hanya ada, tapi juga tidak kosong
+    if not GOOGLE_API_KEY:
+        st.error("GOOGLE_API_KEY di Streamlit Secrets ditemukan, tetapi nilainya kosong. Harap isi nilainya.")
+        st.stop()
+    if not EXA_API_KEY:
+        st.error("EXA_API_KEY di Streamlit Secrets ditemukan, tetapi nilainya kosong. Harap isi nilainya.")
+        st.stop()
+        
     genai.configure(api_key=GOOGLE_API_KEY)
-except (KeyError, Exception) as e:
-    st.error("API Keys (Google & Exa) tidak ditemukan di Secrets atau tidak valid. Harap periksa kembali.")
+
+except KeyError as e:
+    # Error jika key-nya tidak ada sama sekali
+    st.error(f"API Key '{e.args[0]}' tidak ditemukan di Streamlit Secrets. Harap tambahkan.")
+    st.stop()
+except Exception as e:
+    # Error umum lainnya
+    st.error(f"Error saat memuat API Keys: {e}")
     st.stop()
 
 # Inisialisasi model Embeddings sekali per sesi
 if "embeddings" not in st.session_state:
-    st.session_state.embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    # PERBAIKAN: Teruskan juga API key ke model embeddings
+    st.session_state.embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/embedding-001",
+        google_api_key=GOOGLE_API_KEY
+    )
 
 # Fungsi Tools untuk Agen
 @tool
@@ -115,7 +134,7 @@ if "agent" not in st.session_state:
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
             temperature=0.7, 
-            google_api_key=st.secrets["GOOGLE_API_KEY"] # <-- TAMBAHAN EKSPLISIT
+            google_api_key=GOOGLE_API_KEY # <-- Gunakan variabel yang sudah divalidasi
         )
         tools = [web_search, generate_image, process_document, answer_from_document, describe_image]
         
@@ -222,4 +241,5 @@ if prompt:
                 error_message = f"Terjadi kesalahan: {e}"
                 st.error(error_message)
                 st.session_state.messages.append({"role": "assistant", "content": error_message, "type": "text"})
+
 
