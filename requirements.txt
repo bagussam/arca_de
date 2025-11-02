@@ -5,8 +5,8 @@ streamlit
 #LangChain & LangGraph Ecosystem
 
 langchain
-langgraph==0.0.51
-langchain-google-genai==1.0.3
+langgraph
+langchain-google-genai
 langchain-community
 
 #API Clients & Utilities
