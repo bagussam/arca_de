@@ -6,12 +6,11 @@ streamlit
 
 langchain
 langgraph
-langchain-google-genai
+langchain-google-genai==1.0.5
 langchain-community
 
 #API Clients & Utilities
 
-google-generativeai
 exa_py
 pypdf
 pillow
