@@ -11,6 +11,7 @@ langchain-community
 
 #API Clients & Utilities
 
+google-generativeai
 exa_py
 pypdf
 pillow
