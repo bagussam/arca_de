@@ -3,7 +3,8 @@
 import streamlit as st
 import google.generativeai as genai
 from exa_py import Exa
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+# SystemMessage dihapus karena tidak lagi diperlukan oleh agen versi baru
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -16,7 +17,7 @@ import io
 import os
 import tempfile
 import textwrap # <- Untuk membersihkan indentasi prompt
-import traceback # <- PERUBAHAN NO 1 DIMULAI DARI SINI
+import traceback # <- Untuk menampilkan error lengkap
 
 # --- 1. Konfigurasi Halaman dan Judul ---
 st.set_page_config(page_title="Arca-de", page_icon="🕹️", layout="wide")
@@ -75,7 +76,6 @@ def web_search(query: str):
 def generate_image(prompt: str):
     """Gunakan tool ini untuk membuat atau menghasilkan gambar berdasarkan deskripsi teks."""
     try:
-        # PENTING: Gunakan model 'pro' untuk membuat gambar
         image_model = genai.GenerativeModel('gemini-1.5-pro')
         response = image_model.generate_content([prompt], generation_config={"response_mime_type": "image/png"})
         
@@ -83,7 +83,7 @@ def generate_image(prompt: str):
         if not response.parts:
             return "Gagal menghasilkan gambar: Tidak ada data gambar yang diterima dari API."
             
-        # PERBAIKAN 1: Menggunakan .blob, bukan .inline_data.data
+        # PERBAIKAN: Menggunakan .blob, bukan .inline_data.data
         image_data = response.parts[0].blob
         image = Image.open(io.BytesIO(image_data))
         
@@ -140,9 +140,13 @@ def describe_image(file_path: str):
     except Exception as e:
         return f"Gagal mendeskripsikan gambar: {e}"
 
-# --- 3. Inisialisasi Agen LangGraph ---
+# --- 3. Inisialisasi Agen LangGraph & Model Chat Sederhana ---
+# Definisikan kata kunci yang akan memicu agen canggih
+AGENT_KEYWORDS = ["gambar", "buatkan", "ciptakan", "cari", "carikan", "internet", "pdf", "dokumen", "analisis", "deskripsikan"]
+
 if "agent" not in st.session_state:
     try:
+        # 1. Inisialisasi Model "Otak" Agen (yang akan memanggil tools)
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
             temperature=0.7, 
@@ -162,14 +166,18 @@ if "agent" not in st.session_state:
             - Otherwise, answer like a friendly chatbot.
             """)
         
+        # 2. Inisialisasi Agen (Canggih tapi Lambat)
         st.session_state.agent = create_react_agent(
             model=llm,
             tools=tools,
-            messages_modifier=SystemMessage(content=system_prompt_text)
+            # PERBAIKAN FINAL: Menggunakan 'system_message', bukan 'messages_modifier'
+            system_message=system_prompt_text
         )
-    
+        
+        # 3. Inisialisasi Model Chat Sederhana (Cepat)
+        st.session_state.simple_chat = genai.GenerativeModel('gemini-1.5-flash')
+
     except Exception as e:
-        # PERUBAHAN NO 1 ADA DI SINI:
         # Kita tambahkan traceback untuk melihat error lengkapnya
         tb_str = traceback.format_exc()
         st.error(f"Gagal menginisialisasi agen AI: {e}\n\nTraceback lengkap:\n{tb_str}")
@@ -198,7 +206,7 @@ with st.sidebar:
     if uploaded_file and ("processed_file" not in st.session_state or st.session_state.processed_file != uploaded_file.name):
         with st.spinner(f"Memproses file {uploaded_file.name}..."):
             try:
-                # PERBAIKAN 2: Menghapus typo 'J'
+                # PERBAIKAN: Menghapus typo 'J'
                 with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
                     file_path = tmp_file.name
@@ -221,9 +229,9 @@ with st.sidebar:
                 history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
                 
                 if "agent" not in st.session_state:
-                        st.error("Agen AI belum siap. Silakan refresh halaman.")
-                        st.stop()
-                        
+                     st.error("Agen AI belum siap. Silakan refresh halaman.")
+                     st.stop()
+                     
                 response = st.session_state.agent.invoke({"messages": history})
                 
                 # Pastikan response adalah AIMessage
@@ -270,19 +278,41 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Sedang berpikir..."):
             try:
-                history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
+                # PERBAIKAN: Logika "Router"
+                # Cek apakah ada kata kunci yang butuh agen
+                use_agent = any(keyword in prompt.lower() for keyword in AGENT_KEYWORDS)
                 
-                if "agent" not in st.session_state:
+                if use_agent:
+                    # Jika ada kata kunci, panggil AGEN (Lambat tapi canggih)
+                    history = [HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in st.session_state.messages]
+                    
+                    if "agent" not in st.session_state:
                         st.error("Agen AI belum siap. Silakan refresh halaman.")
                         st.stop()
                         
-                response = st.session_state.agent.invoke({"messages": history})
+                    response = st.session_state.agent.invoke({"messages": history})
+                    
+                    if isinstance(response.get('messages', [])[-1], AIMessage):
+                        answer = response['messages'][-1].content
+                    else:
+                        answer = str(response) # Fallback
                 
-                if isinstance(response.get('messages', [])[-1], AIMessage):
-                    answer = response['messages'][-1].content
                 else:
-                    answer = str(response) # Fallback
+                    # Jika tidak ada kata kunci, panggil CHAT SEDERHANA (Cepat)
+                    if "simple_chat" not in st.session_state:
+                        st.error("Model chat belum siap. Silakan refresh halaman.")
+                        st.stop()
+                    
+                    # Buat riwayat chat sederhana
+                    chat_history = []
+                    for msg in st.session_state.messages[:-1]: # Ambil semua KECUALI prompt terakhir
+                        chat_history.append({"role": "user" if msg["role"] == "user" else "model", "parts": [msg["content"]]})
+                    
+                    chat_session = st.session_state.simple_chat.start_chat(history=chat_history)
+                    response = chat_session.send_message(prompt)
+                    answer = response.text
 
+                # --- Logika Menampilkan Respons ---
                 if "Gambar berhasil dibuat" in answer:
                     image_path = "temp_generated_image.png"
                     if os.path.exists(image_path):
